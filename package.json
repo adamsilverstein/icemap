@@ -1,0 +1,24 @@
+{
+  "name": "icemap",
+  "version": "1.0.0",
+  "description": "Displays a map of Icecast listeners on a WordPress website.",
+  "main": "index.js",
+  "scripts": {
+    "build": "wp-scripts build && cp build/index.js dist/index.js && cp build/index.asset.php dist/index.asset.php",
+    "start": "wp-scripts start"
+  },
+  "keywords": [
+    "wordpress",
+    "plugin",
+    "icecast",
+    "map"
+  ],
+  "author": "Your Name",
+  "license": "GPL-2.0-or-later",
+  "devDependencies": {
+    "@wordpress/scripts": "^26.7.0"
+  },
+  "dependencies": {
+    "@wordpress/browserslist-config": "^6.22.0"
+  }
+}

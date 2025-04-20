@@ -114,8 +114,8 @@ class Icemap {
 		$access_token = get_option( 'icemap_mapbox_access_token' );
 		if ( ! empty( $access_token ) ) {
 			// Load in header (false) to ensure it's available before our component tries to use it
-			wp_enqueue_script( 'mapbox-gl', 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js', array(), '2.15.0', false );
-			wp_enqueue_style( 'mapbox-gl', 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css', array(), '2.15.0' );
+			wp_enqueue_script( 'mapbox-gl', 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js', array(), '2.15.0', true );
+			wp_enqueue_style( 'mapbox-gl', 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css', array(), '2.15.0', true );
 
 			// Add the access token to the page - use 'after' to ensure it runs after the script is loaded
 			wp_add_inline_script( 'mapbox-gl', 'window.mapboxgl.accessToken = "' . esc_js( $access_token ) . '";', 'after' );

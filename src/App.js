@@ -15,8 +15,14 @@ function App() {
 				setLoading(true);
 				setError(null);
 				const data = await icecastService.getListeners();
-				console.log('Received listener data:', data);
-				setListeners(JSON.parse(data));
+				// console.log('Received listener data (raw):', data);
+
+				// The data is already parsed in icecastService.js, no need to parse it again
+				// Check if data is a string (needs parsing) or already an object
+				const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+				// console.log('Parsed listener data:', parsedData);
+
+				setListeners(parsedData);
 			} catch (err) {
 				console.error('Error in App component:', err);
 				setError('Failed to load listener data. Please check the console for details.');
@@ -38,80 +44,114 @@ function App() {
 	useEffect(() => {
 		async function processListeners() {
 			if (!listeners) return;
-			console.log( 'Processing listeners:', listeners);
+			// console.log('Processing listeners (raw):', listeners);
+			// console.log('Processing listeners (type):', typeof listeners);
+			// console.log('Processing listeners (keys):', listeners ? Object.keys(listeners) : 'null');
 			try {
 				// Extract the actual listeners array
 				let listenersArray = [];
-				if (listeners.source && listeners.source.listener ) {
-					listenersArray = listeners.source.listener;
+				// More robust checking of the data structure
+				if (listeners.source && listeners.source.listener) {
+					// console.log('Found listeners.source.listener:', listeners.source.listener);
+					listenersArray = Array.isArray(listeners.source.listener)
+						? listeners.source.listener
+						: [listeners.source.listener]; // Handle case where it's a single object
+				} else if (listeners.source && listeners.source.listeners && listeners.source.listeners.listener) {
+					// console.log('Found listeners.source.listeners.listener:', listeners.source.listeners.listener);
+					listenersArray = Array.isArray(listeners.source.listeners.listener)
+						? listeners.source.listeners.listener
+						: [listeners.source.listeners.listener]; // Handle case where it's a single object
 				} else {
-					console.log('Unexpected listeners data format:', listeners);
+					// console.log('Unexpected listeners data format:', listeners);
+					setProcessedListeners([]);
 					return;
 				}
 
+				// console.log('Extracted listeners array:', listenersArray);
+
 				// Check if we have any listeners
-				if (!listenersArray.length) {
-					console.log('No listeners in the array');
-					setProcessedListeners({ source: { listeners: { listener: [] } } });
+				if (!listenersArray || !listenersArray.length) {
+					// console.log('No listeners in the array');
+					setProcessedListeners([]);
 					return;
 				}
 
 				// Process each listener to add geolocation data
 				const processed = [];
 
-		// Limit to 5 ips.
-		listenersArray = listenersArray.slice( 0,4 );
+				// Limit to 5 ips.
+				listenersArray = listenersArray.slice(0, 4);
+				// console.log('Limited listeners array:', listenersArray);
 
 				for (const listener of listenersArray) {
-					if (!listener || !listener.IP) {
-						console.log('Listener missing IP address:', listener);
+					// console.log('Processing listener:', listener);
+
+					// Check if listener exists and has an IP property
+					if (!listener) {
+						// console.log('Listener is null or undefined');
+						continue;
+					}
+
+					// Check for IP property with different possible casings
+					const ip = listener.IP || listener.ip || listener.Ip || null;
+					if (!ip) {
+						// console.log('Listener missing IP address:', listener);
 						continue;
 					}
 
 					try {
 						// Fetch geolocation data for the IP
-						const geoData = await icecastService.getGeolocation(listener.IP);
+						// console.log('Fetching geolocation for IP:', ip);
+						const geoData = await icecastService.getGeolocation(ip);
+						// console.log('Received geolocation data:', geoData);
 
 						if (geoData && geoData.latitude && geoData.longitude) {
-							processed.push({
+							const processedListener = {
 								...listener,
 								latitude: geoData.latitude,
 								longitude: geoData.longitude,
-								city: geoData.city,
-								country: geoData.country_name,
-								ip: listener.IP
-							});
+								city: geoData.city || 'Unknown',
+								country: geoData.country_name || 'Unknown',
+								ip: ip
+							};
+							// console.log('Processed listener with geolocation:', processedListener);
+							processed.push(processedListener);
 						} else {
-							console.log('No geolocation data for IP:', listener.IP);
+							// console.log('No geolocation data for IP:', ip);
 
 							// Use random coordinates for testing if geolocation fails
-							processed.push({
+							const randomListener = {
 								...listener,
 								latitude: Math.random() * 180 - 90,
 								longitude: Math.random() * 360 - 180,
 								city: 'Unknown',
 								country: 'Unknown',
-								ip: listener.IP
-							});
+								ip: ip
+							};
+							// console.log('Processed listener with random coordinates:', randomListener);
+							processed.push(randomListener);
 						}
 						// Pause for a short time to avoid overwhelming the geolocation API
 						await new Promise(resolve => setTimeout(resolve, 500));
 					} catch (err) {
-						console.error('Error fetching geolocation for IP:', listener.IP, err);
+						console.error('Error fetching geolocation for IP:', ip, err);
 
 						// Use random coordinates for testing if geolocation fails
-						processed.push({
+						const errorListener = {
 							...listener,
 							latitude: Math.random() * 180 - 90,
 							longitude: Math.random() * 360 - 180,
 							city: 'Unknown',
 							country: 'Unknown',
-							ip: listener.IP
-						});
+							ip: ip
+						};
+						// console.log('Processed listener with random coordinates (after error):', errorListener);
+						processed.push(errorListener);
 					}
 				}
 
 				// Update the processed listeners
+				// console.log('Final processed listeners:', processed);
 				setProcessedListeners(processed);
 			} catch (err) {
 				console.error('Error processing listeners:', err);

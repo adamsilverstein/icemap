@@ -4,7 +4,9 @@
  */
 async function getListeners() {
 	try {
+		// console.log('Fetching listeners from API...');
 		const response = await fetch('/wp-json/icemap/v1/listeners');
+		// console.log('Received response status:', response.status);
 
 		// Check if the response is ok
 		if (!response.ok) {
@@ -13,11 +15,22 @@ async function getListeners() {
 			throw new Error(`Server returned ${response.status}: ${errorText}`);
 		}
 
-		// Parse the JSON response
-		const data = await response.json();
+		// Get the raw text first for logging
+		const responseText = await response.clone().text();
+		// console.log('Raw response text:', responseText);
 
-		// Log the data structure for debugging
-		console.log('Received listener data:', data);
+		// Try to parse the JSON response
+		let data;
+		try {
+			data = await response.json();
+			// console.log('Parsed listener data (structure):', JSON.stringify(data, null, 2));
+			// console.log('Parsed listener data (type):', typeof data);
+			// console.log('Parsed listener data (keys):', data ? Object.keys(data) : 'null');
+		} catch (parseError) {
+			console.error('Error parsing JSON response:', parseError);
+			// console.log('Response was not valid JSON, returning raw text');
+			return responseText; // Return the raw text if parsing fails
+		}
 
 		return data;
 	} catch (error) {
@@ -34,7 +47,9 @@ async function getListeners() {
  */
 async function getGeolocation(ip) {
 	try {
+		// console.log(`Fetching geolocation for IP: ${ip}`);
 		const response = await fetch(`/wp-json/icemap/v1/geolocation/${ip}`);
+		// console.log('Received geolocation response status:', response.status);
 
 		// Check if the response is ok
 		if (!response.ok) {
@@ -43,8 +58,19 @@ async function getGeolocation(ip) {
 			throw new Error(`Server returned ${response.status}: ${errorText}`);
 		}
 
-		// Parse the JSON response
-		const data = await response.json();
+		// Get the raw text first for logging
+		const responseText = await response.clone().text();
+		// console.log('Raw geolocation response text:', responseText);
+
+		// Try to parse the JSON response
+		let data;
+		try {
+			data = await response.json();
+			// console.log('Parsed geolocation data:', data);
+		} catch (parseError) {
+			console.error('Error parsing geolocation JSON response:', parseError);
+			return null; // Return null if parsing fails
+		}
 		return data;
 	} catch (error) {
 		console.error('Failed to fetch geolocation:', error);

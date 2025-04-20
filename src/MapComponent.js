@@ -1,13 +1,150 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 function MapComponent({ listeners }) {
 	const mapContainer = useRef(null);
 	const map = useRef(null);
-	const [lng, setLng] = useState(0);
-	const [lat, setLat] = useState(0);
-	const [zoom, setZoom] = useState(1);
+	const [lng, setLng] = useState(107.5920);
+	const [lat, setLat] = useState(38.8683);
+	const [zoom, setZoom] = useState(9);
 	const markers = useRef([]);
 	const [error, setError] = useState(null);
+	const [mapReady, setMapReady] = useState(false);
+	const listenersRef = useRef(null);
+	const markerAddAttempts = useRef(0);
+	const maxMarkerAttempts = 10; // Maximum number of attempts to add markers
+
+	// Store listeners in a ref to access in callbacks
+	useEffect(() => {
+		listenersRef.current = listeners;
+	}, [listeners]);
+
+	// Function to check if map is truly ready for markers
+	const isMapReady = useCallback(() => {
+		if (!map.current) return false;
+
+		try {
+			// Check multiple conditions to determine if map is truly ready
+			const container = map.current.getContainer();
+			const hasContainer = !!container && document.body.contains(container);
+			const isLoaded = !!map.current._loaded;
+			const hasStyle = !!map.current.getStyle();
+			const canvasExists = !!container && !!container.querySelector('.mapboxgl-canvas');
+
+			const readyState = {
+				hasContainer,
+				isLoaded,
+				hasStyle,
+				canvasExists
+			};
+
+			console.log('Map ready state check:', readyState);
+
+			// Map is ready if it meets all these conditions
+			return hasContainer && isLoaded && hasStyle && canvasExists;
+		} catch (err) {
+			console.error('Error checking map ready state:', err);
+			return false;
+		}
+	}, []);
+
+	// Function to add markers to the map
+	const addMarkersToMap = useCallback(() => {
+		if (!map.current || error) {
+			console.log('Cannot add markers: map not available or has error');
+			return false;
+		}
+
+		try {
+			console.log('Map is ready! Adding markers...');
+
+			// Clear existing markers
+			markers.current.forEach(marker => marker.remove());
+			markers.current = [];
+
+			const listeners = listenersRef.current;
+
+			// Check if listeners exists and is in the expected format
+			if (!listeners) {
+				console.log('No listeners data available');
+				return true; // Successfully processed (no markers to add)
+			}
+
+			// Check if listeners is an array
+			const listenersArray = Array.isArray(listeners) ? listeners : [];
+			console.log('Processing listeners array:', listenersArray);
+
+			if (!listenersArray.length) {
+				console.log('No listeners in the array');
+				return true; // Successfully processed (no markers to add)
+			}
+
+			// Create marker objects first without adding them to the map
+			const markerObjects = [];
+			const mapboxgl = window.mapboxgl;
+
+			listenersArray.forEach((listener, index) => {
+				if (!listener) return;
+
+				const latitude = listener.latitude;
+				const longitude = listener.longitude;
+
+				if (latitude === undefined || longitude === undefined) return;
+
+				const ip = listener.ip || listener.IP || 'Unknown';
+				const city = listener.city || 'Unknown';
+				const country = listener.country || 'Unknown';
+
+				const popup = new mapboxgl.Popup({ offset: 25 })
+					.setHTML(`
+						<h3>Listener</h3>
+						<p>IP: ${ip}</p>
+						<p>Location: ${city}, ${country}</p>
+					`);
+
+				const marker = new mapboxgl.Marker()
+					.setLngLat([longitude, latitude])
+					.setPopup(popup);
+
+				markerObjects.push({ marker, lngLat: [longitude, latitude] });
+			});
+
+			console.log(`Created ${markerObjects.length} marker objects, now adding to map...`);
+
+			// Now add all markers to the map
+			markerObjects.forEach((obj, index) => {
+				try {
+					obj.marker.addTo(map.current);
+					markers.current.push(obj.marker);
+					console.log(`Added marker ${index} to map`);
+				} catch (err) {
+					console.error(`Error adding marker ${index} to map:`, err);
+				}
+			});
+
+			// If we have markers, fit the map to show all of them
+			if (markers.current.length > 0) {
+				const bounds = new mapboxgl.LngLatBounds();
+
+				markerObjects.forEach(obj => {
+					bounds.extend(obj.lngLat);
+				});
+
+				map.current.fitBounds(bounds, {
+					padding: 50,
+					maxZoom: 15
+				});
+
+				console.log(`Successfully added ${markers.current.length} markers to map`);
+			} else {
+				console.log('No markers were added to the map');
+			}
+
+			return true; // Successfully added markers
+		} catch (err) {
+			console.error('Error adding markers to map:', err);
+			return false;
+		}
+	}, [error, isMapReady]);
 
 	// Initialize map when component mounts
 	useEffect(() => {
@@ -29,15 +166,24 @@ function MapComponent({ listeners }) {
 		}
 
 		try {
+			console.log('Initializing map...');
+
+			// Create the map
 			map.current = new mapboxgl.Map({
-				container: mapContainer.current,
-				style: 'mapbox://styles/mapbox/streets-v12',
+				container: 'icemap',
 				center: [lng, lat],
 				zoom: zoom
 			});
 
 			// Add navigation controls
 			map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+			// Set up event listeners for map readiness
+			map.current.on('load', () => {
+				console.log('Map "load" event fired');
+				// Don't set mapReady here - we'll use our custom isMapReady check
+				addMarkersToMap();
+			});
 
 			// Clean up on unmount
 			return () => {
@@ -49,81 +195,7 @@ function MapComponent({ listeners }) {
 			setError(`Error initializing map: ${err.message}`);
 			console.error('Error initializing Mapbox map:', err);
 		}
-	}, []);
-
-	// Update markers when listeners data changes
-	useEffect(() => {
-		if (!map.current || error) return;
-
-		try {
-			// Clear existing markers
-			markers.current.forEach(marker => marker.remove());
-			markers.current = [];
-
-			// Check if listeners exists and is in the expected format
-			if (!listeners) {
-				console.log('No listeners data available');
-				return;
-			}
-
-			// Log the listeners data structure for debugging
-			console.log('Listeners data:', listeners);
-
-			// Check if listeners is an array
-			const listenersArray = Array.isArray(listeners) ? listeners : [];
-
-			// Check if we have any listeners
-			if (!listenersArray.length) {
-				console.log('No listeners in the array');
-				return;
-			}
-
-			// Create markers for each listener
-			listenersArray.forEach(listener => {
-				// Check if listener has location data
-				if (!listener || listener.latitude === undefined || listener.longitude === undefined) {
-					console.log('Listener missing location data:', listener);
-					return;
-				}
-
-				try {
-					const popup = new mapboxgl.Popup({ offset: 25 })
-						.setHTML(`
-							<h3>Listener</h3>
-							<p>IP: ${listener.ip || 'Unknown'}</p>
-							<p>Location: ${listener.city || 'Unknown'}, ${listener.country || 'Unknown'}</p>
-						`);
-
-					const marker = new mapboxgl.Marker()
-						.setLngLat([listener.longitude, listener.latitude])
-						.setPopup(popup)
-						.addTo(map.current);
-
-					markers.current.push(marker);
-				} catch (markerErr) {
-					console.error('Error creating marker for listener:', listener, markerErr);
-				}
-			});
-
-			// If we have listeners with coordinates, fit the map to show all markers
-			if (markers.current.length > 0) {
-				const bounds = new mapboxgl.LngLatBounds();
-				markers.current.forEach(marker => {
-					bounds.extend(marker.getLngLat());
-				});
-
-				map.current.fitBounds(bounds, {
-					padding: 50,
-					maxZoom: 15
-				});
-			} else {
-				console.log('No markers were created');
-			}
-		} catch (err) {
-			setError(`Error updating markers: ${err.message}`);
-			console.error('Error updating markers:', err);
-		}
-	}, [listeners, error]);
+	}, [lng, lat, zoom]);
 
 	// If there's an error, display it
 	if (error) {

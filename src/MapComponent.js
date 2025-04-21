@@ -1,220 +1,223 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 
 function MapComponent({ listeners }) {
-	const mapContainer = useRef(null);
-	const map = useRef(null);
-	const [lng, setLng] = useState(107.5920);
-	const [lat, setLat] = useState(38.8683);
-	const [zoom, setZoom] = useState(9);
-	const markers = useRef([]);
-	const [error, setError] = useState(null);
-	const [mapReady, setMapReady] = useState(false);
-	const listenersRef = useRef(null);
-	const markerAddAttempts = useRef(0);
-	const maxMarkerAttempts = 10; // Maximum number of attempts to add markers
+  const mapContainerStyle = {
+    width: '100%',
+    height: '400px'
+  };
 
-	// Store listeners in a ref to access in callbacks
-	useEffect(() => {
-		listenersRef.current = listeners;
-	}, [listeners]);
+  // Default center (will be adjusted based on markers)
+  const [center, setCenter] = useState({
+    lat: 38.8683,
+    lng: -107.5920
+  });
 
-	// Function to check if map is truly ready for markers
-	const isMapReady = useCallback(() => {
-		if (!map.current) return false;
+  const [zoom, setZoom] = useState(3);
+  const [error, setError] = useState(null);
+  const [markers, setMarkers] = useState([]);
+  const [selectedMarker, setSelectedMarker] = useState(null);
+  const mapRef = useRef(null);
+  const listenersRef = useRef(null);
 
-		try {
-			// Check multiple conditions to determine if map is truly ready
-			const container = map.current.getContainer();
-			const hasContainer = !!container && document.body.contains(container);
-			const isLoaded = !!map.current._loaded;
-			const hasStyle = !!map.current.getStyle();
-			const canvasExists = !!container && !!container.querySelector('.mapboxgl-canvas');
+  // Store listeners in a ref to access in callbacks
+  useEffect(() => {
+    listenersRef.current = listeners;
+    // Process listeners when they change
+    processListeners();
+  }, [listeners]);
 
-			const readyState = {
-				hasContainer,
-				isLoaded,
-				hasStyle,
-				canvasExists
-			};
+  // Load the Google Maps JavaScript API
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: window.googleMapsApiKey || '',
+    // You can add additional libraries if needed
+    // libraries: ['places']
+  });
 
-			console.log('Map ready state check:', readyState);
+  // Process listeners data and create marker objects
+  const processListeners = useCallback(() => {
+    if (!listenersRef.current) {
+      console.log('No listeners data available');
+      setMarkers([]);
+      return;
+    }
 
-			// Map is ready if it meets all these conditions
-			return hasContainer && isLoaded && hasStyle && canvasExists;
-		} catch (err) {
-			console.error('Error checking map ready state:', err);
-			return false;
-		}
-	}, []);
+    // Check if listeners is an array
+    const listenersArray = Array.isArray(listenersRef.current) ? listenersRef.current : [];
+    console.log('Processing listeners array:', listenersArray);
 
-	// Function to add markers to the map
-	const addMarkersToMap = useCallback(() => {
-		if (!map.current || error) {
-			console.log('Cannot add markers: map not available or has error');
-			return false;
-		}
+    if (!listenersArray.length) {
+      console.log('No listeners in the array');
+      setMarkers([]);
+      return;
+    }
 
-		try {
-			console.log('Map is ready! Adding markers...');
+    // Create marker objects
+    const newMarkers = listenersArray
+      .filter(listener => listener && listener.latitude !== undefined && listener.longitude !== undefined)
+      .map((listener, index) => {
+        const ip = listener.ip || listener.IP || 'Unknown';
+        const city = listener.city || 'Unknown';
+        const country = listener.country || 'Unknown';
 
-			// Clear existing markers
-			markers.current.forEach(marker => marker.remove());
-			markers.current = [];
+        return {
+          id: index,
+          position: {
+            lat: parseFloat(listener.latitude),
+            lng: parseFloat(listener.longitude)
+          },
+          info: {
+            ip,
+            city,
+            country
+          }
+        };
+      });
 
-			const listeners = listenersRef.current;
+    console.log(`Created ${newMarkers.length} marker objects`);
+    setMarkers(newMarkers);
 
-			// Check if listeners exists and is in the expected format
-			if (!listeners) {
-				console.log('No listeners data available');
-				return true; // Successfully processed (no markers to add)
-			}
+    // If we have markers, fit the map to show all of them
+    if (newMarkers.length > 0 && mapRef.current) {
+      fitBoundsToMarkers(newMarkers);
+    }
+  }, []);
 
-			// Check if listeners is an array
-			const listenersArray = Array.isArray(listeners) ? listeners : [];
-			console.log('Processing listeners array:', listenersArray);
+  // Fit map bounds to show all markers
+  const fitBoundsToMarkers = useCallback((markersToFit) => {
+    if (!mapRef.current || !markersToFit.length) return;
 
-			if (!listenersArray.length) {
-				console.log('No listeners in the array');
-				return true; // Successfully processed (no markers to add)
-			}
+    const bounds = new window.google.maps.LatLngBounds();
+    markersToFit.forEach(marker => {
+      bounds.extend(marker.position);
+    });
 
-			// Create marker objects first without adding them to the map
-			const markerObjects = [];
-			const mapboxgl = window.mapboxgl;
+    mapRef.current.fitBounds(bounds);
+    console.log('Map fitted to bounds');
+  }, []);
 
-			listenersArray.forEach((listener, index) => {
-				if (!listener) return;
+  // Handle map load
+  const onMapLoad = useCallback((map) => {
+    console.log('Map loaded successfully');
+    mapRef.current = map;
 
-				const latitude = listener.latitude;
-				const longitude = listener.longitude;
+    // If we already have markers, fit bounds
+    if (markers.length > 0) {
+      fitBoundsToMarkers(markers);
+    }
+  }, [markers, fitBoundsToMarkers]);
 
-				if (latitude === undefined || longitude === undefined) return;
+  // Handle marker click
+  const handleMarkerClick = (marker) => {
+    setSelectedMarker(marker);
+  };
 
-				const ip = listener.ip || listener.IP || 'Unknown';
-				const city = listener.city || 'Unknown';
-				const country = listener.country || 'Unknown';
+  // Handle info window close
+  const handleInfoWindowClose = () => {
+    setSelectedMarker(null);
+  };
 
-				const popup = new mapboxgl.Popup({ offset: 25 })
-					.setHTML(`
-						<h3>Listener</h3>
-						<p>IP: ${ip}</p>
-						<p>Location: ${city}, ${country}</p>
-					`);
+  // If there's a load error, display it
+  if (loadError) {
+    return (
+      <div style={{
+        width: '100%',
+        height: '400px',
+        backgroundColor: '#f8d7da',
+        color: '#721c24',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+        border: '1px solid #f5c6cb',
+        borderRadius: '5px'
+      }}>
+        <div>
+          <h3>Map Error</h3>
+          <p>Error loading Google Maps: {loadError.message}</p>
+          <p>Please check your Google Maps API key and internet connection.</p>
+        </div>
+      </div>
+    );
+  }
 
-				const marker = new mapboxgl.Marker()
-					.setLngLat([longitude, latitude])
-					.setPopup(popup);
+  // If there's an error, display it
+  if (error) {
+    return (
+      <div style={{
+        width: '100%',
+        height: '400px',
+        backgroundColor: '#f8d7da',
+        color: '#721c24',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+        border: '1px solid #f5c6cb',
+        borderRadius: '5px'
+      }}>
+        <div>
+          <h3>Map Error</h3>
+          <p>{error}</p>
+          <p>Please check the console for more details.</p>
+        </div>
+      </div>
+    );
+  }
 
-				markerObjects.push({ marker, lngLat: [longitude, latitude] });
-			});
+  // If the API is not yet loaded, show a loading message
+  if (!isLoaded) {
+    return (
+      <div style={{
+        width: '100%',
+        height: '400px',
+        backgroundColor: '#f0f0f0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <p>Loading map...</p>
+      </div>
+    );
+  }
 
-			console.log(`Created ${markerObjects.length} marker objects, now adding to map...`);
+  return (
+    <div id="map-container">
+      <GoogleMap
+        mapContainerStyle={mapContainerStyle}
+        center={center}
+        zoom={zoom}
+        onLoad={onMapLoad}
+        options={{
+          fullscreenControl: true,
+          streetViewControl: true,
+          mapTypeControl: true,
+          zoomControl: true
+        }}
+      >
+        {markers.map(marker => (
+          <Marker
+            key={marker.id}
+            position={marker.position}
+            onClick={() => handleMarkerClick(marker)}
+          />
+        ))}
 
-			// Now add all markers to the map
-			markerObjects.forEach((obj, index) => {
-				try {
-					obj.marker.addTo(map.current);
-					markers.current.push(obj.marker);
-					console.log(`Added marker ${index} to map`);
-				} catch (err) {
-					console.error(`Error adding marker ${index} to map:`, err);
-				}
-			});
-
-			// If we have markers, fit the map to show all of them
-			if (markers.current.length > 0) {
-				const bounds = new mapboxgl.LngLatBounds();
-
-				markerObjects.forEach(obj => {
-					bounds.extend(obj.lngLat);
-				});
-
-				map.current.fitBounds(bounds, {
-					padding: 50,
-					maxZoom: 15
-				});
-
-				console.log(`Successfully added ${markers.current.length} markers to map`);
-			} else {
-				console.log('No markers were added to the map');
-			}
-
-			return true; // Successfully added markers
-		} catch (err) {
-			console.error('Error adding markers to map:', err);
-			return false;
-		}
-	}, [error, isMapReady]);
-
-	// Initialize map when component mounts
-	useEffect(() => {
-		if (map.current) return; // Initialize map only once
-
-		// Check if mapboxgl is defined
-		const mapboxgl = window.mapboxgl;
-		if (typeof mapboxgl === 'undefined') {
-			setError('Mapbox GL JS is not loaded. Please check your internet connection.');
-			console.error('Mapbox GL JS is not defined on the window object');
-			return;
-		}
-
-		// Check if access token is set
-		if (!mapboxgl.accessToken) {
-			setError('Mapbox access token is not set. Please add a valid access token in the Icemap settings.');
-			console.error('Mapbox access token is not set');
-			return;
-		}
-
-		try {
-			console.log('Initializing map...');
-
-			// Create the map
-			map.current = new mapboxgl.Map({
-				container: 'icemap',
-				center: [lng, lat],
-				zoom: zoom
-			});
-
-			// Add navigation controls
-			map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
-			// Set up event listeners for map readiness
-			map.current.on('load', () => {
-				console.log('Map "load" event fired');
-				// Don't set mapReady here - we'll use our custom isMapReady check
-				addMarkersToMap();
-			});
-
-			// Clean up on unmount
-			return () => {
-				if (map.current) {
-					map.current.remove();
-				}
-			};
-		} catch (err) {
-			setError(`Error initializing map: ${err.message}`);
-			console.error('Error initializing Mapbox map:', err);
-		}
-	}, [lng, lat, zoom]);
-
-	// If there's an error, display it
-	if (error) {
-		return (
-			<div style={{ width: '100%', height: '400px', backgroundColor: '#f8d7da', color: '#721c24',
-									 display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
-									 border: '1px solid #f5c6cb', borderRadius: '5px' }}>
-				<div>
-					<h3>Map Error</h3>
-					<p>{error}</p>
-					<p>Please check the console for more details.</p>
-				</div>
-			</div>
-		);
-	}
-
-	return (
-		<div ref={mapContainer} style={{ width: '100%', height: '400px' }} />
-	);
+        {selectedMarker && (
+          <InfoWindow
+            position={selectedMarker.position}
+            onCloseClick={handleInfoWindowClose}
+          >
+            <div>
+              <h3>Listener</h3>
+              <p>IP: {selectedMarker.info.ip}</p>
+              <p>Location: {selectedMarker.info.city}, {selectedMarker.info.country}</p>
+            </div>
+          </InfoWindow>
+        )}
+      </GoogleMap>
+    </div>
+  );
 }
 
 export default MapComponent;

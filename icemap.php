@@ -66,26 +66,20 @@ function icemap_render_block( $attributes ) {
 	wp_enqueue_script( 'icemap-index' );
 	wp_enqueue_style( 'icemap-index' );
 
-	// Make sure Mapbox GL JS is enqueued if available
-	$access_token = get_option( 'icemap_mapbox_access_token' );
-	if ( ! empty( $access_token ) ) {
-		wp_enqueue_script( 'mapbox-gl' );
-		wp_enqueue_style( 'mapbox-gl' );
+	// Make sure Google Maps API is enqueued if available
+	$api_key = get_option( 'icemap_google_maps_api_key' );
+	if ( ! empty( $api_key ) ) {
+		wp_enqueue_script( 'google-maps' );
 	}
 
 	// Build the HTML output
 	$output = '<div id="root" class="icemap-container" style="height: ' . esc_attr( $height ) . '"></div>';
 
-	// Add inline script to ensure mapboxgl is available and access token is set
-	if ( ! empty( $access_token ) ) {
+	// Add inline script to ensure Google Maps API key is set
+	if ( ! empty( $api_key ) ) {
 		$output .= '<script>
-			// Ensure mapboxgl is defined and access token is set
-			if (typeof window.mapboxgl !== "undefined") {
-				// Make sure mapboxgl is available globally
-				window.mapboxgl.accessToken = "' . esc_js( $access_token ) . '";
-			} else {
-				console.error("Mapbox GL JS is not loaded. Please check if the script is being blocked.");
-			}
+			// Make Google Maps API key available globally
+			window.googleMapsApiKey = "' . esc_js( $api_key ) . '";
 		</script>';
 	}
 
@@ -111,25 +105,25 @@ class Icemap {
 	}
 
 	public function enqueue_mapbox_gl() {
-		$access_token = get_option( 'icemap_mapbox_access_token' );
-		if ( ! empty( $access_token ) ) {
-			// Load in header (false) to ensure it's available before our component tries to use it
-			wp_enqueue_script( 'mapbox-gl', 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js', array(), '2.15.0', true );
-			wp_enqueue_style( 'mapbox-gl', 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css', array(), '2.15.0', true );
+		// This method is kept for backward compatibility but now loads Google Maps instead
+		$api_key = get_option( 'icemap_google_maps_api_key' );
+		if ( ! empty( $api_key ) ) {
+			// Load Google Maps API
+			wp_enqueue_script( 'google-maps', 'https://maps.googleapis.com/maps/api/js?key=' . esc_attr( $api_key ), array(), null, true );
 
-			// Add the access token to the page - use 'after' to ensure it runs after the script is loaded
-			wp_add_inline_script( 'mapbox-gl', 'window.mapboxgl.accessToken = "' . esc_js( $access_token ) . '";', 'after' );
+			// Add the API key to the page
+			wp_add_inline_script( 'google-maps', 'window.googleMapsApiKey = "' . esc_js( $api_key ) . '";', 'after' );
 		}
 	}
 
 	public function enqueue_scripts() {
-		// Get the access token
-		$access_token = get_option( 'icemap_mapbox_access_token' );
+		// Get the API key
+		$api_key = get_option( 'icemap_google_maps_api_key' );
 
-		// Define dependencies - include mapbox-gl if access token is available
+		// Define dependencies - include google-maps if API key is available
 		$dependencies = array( 'wp-element' );
-		if ( ! empty( $access_token ) ) {
-			$dependencies[] = 'mapbox-gl';
+		if ( ! empty( $api_key ) ) {
+			$dependencies[] = 'google-maps';
 		}
 
 		// Enqueue the script with the appropriate dependencies

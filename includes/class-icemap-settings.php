@@ -32,7 +32,7 @@ class Icemap_Settings {
 
 		register_setting(
 			'icemap_settings',
-			'icemap_mapbox_access_token'
+			'icemap_google_maps_api_key'
 		);
 
 		register_setting(
@@ -75,13 +75,13 @@ class Icemap_Settings {
 		);
 
 		add_settings_field(
-			'icemap_mapbox_access_token',
-			'Mapbox Access Token',
+			'icemap_google_maps_api_key',
+			'Google Maps API Key',
 			array( $this, 'render_text_field' ),
 			'icemap-settings',
 			'icemap_settings_section',
 			array(
-				'label_for' => 'icemap_mapbox_access_token'
+				'label_for' => 'icemap_google_maps_api_key'
 			)
 		);
 
@@ -109,7 +109,7 @@ class Icemap_Settings {
 	}
 
 	public function render_settings_section() {
-		echo '<p>Enter your Icecast server details (server, mount point, username, password) and Mapbox access token.</p>';
+		echo '<p>Enter your Icecast server details (server, mount point, username, password) and Google Maps API key.</p>';
 	}
 
 	public function render_text_field( $args ) {

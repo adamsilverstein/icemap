@@ -37,12 +37,33 @@ class Icemap_Settings {
 
 		register_setting(
 			'icemap_settings',
+			'icemap_google_maps_map_id'
+		);
+
+		register_setting(
+			'icemap_settings',
 			'icemap_username'
 		);
 
 		register_setting(
 			'icemap_settings',
 			'icemap_password'
+		);
+
+		register_setting(
+			'icemap_settings',
+			'icemap_default_latitude',
+			array(
+				'sanitize_callback' => array( $this, 'sanitize_coordinate' )
+			)
+		);
+
+		register_setting(
+			'icemap_settings',
+			'icemap_default_longitude',
+			array(
+				'sanitize_callback' => array( $this, 'sanitize_coordinate' )
+			)
 		);
 
 		add_settings_section(
@@ -77,11 +98,23 @@ class Icemap_Settings {
 		add_settings_field(
 			'icemap_google_maps_api_key',
 			'Google Maps API Key',
-			array( $this, 'render_text_field' ),
+			array( $this, 'render_password_field' ),
 			'icemap-settings',
 			'icemap_settings_section',
 			array(
 				'label_for' => 'icemap_google_maps_api_key'
+			)
+		);
+
+		add_settings_field(
+			'icemap_google_maps_map_id',
+			'Google Maps Map ID',
+			array( $this, 'render_text_field_with_description' ),
+			'icemap-settings',
+			'icemap_settings_section',
+			array(
+				'label_for' => 'icemap_google_maps_map_id',
+				'description' => 'Required for Advanced Markers. Create a Map ID in the <a href="https://console.cloud.google.com/google/maps-apis/map-ids" target="_blank">Google Cloud Console</a> under Google Maps Platform > Maps Management.'
 			)
 		);
 
@@ -106,10 +139,34 @@ class Icemap_Settings {
 				'label_for' => 'icemap_password'
 			)
 		);
+
+		add_settings_field(
+			'icemap_default_latitude',
+			'Default Latitude',
+			array( $this, 'render_text_field_with_description' ),
+			'icemap-settings',
+			'icemap_settings_section',
+			array(
+				'label_for' => 'icemap_default_latitude',
+				'description' => 'Default latitude to use when geolocation fails (e.g., 38.8683)'
+			)
+		);
+
+		add_settings_field(
+			'icemap_default_longitude',
+			'Default Longitude',
+			array( $this, 'render_text_field_with_description' ),
+			'icemap-settings',
+			'icemap_settings_section',
+			array(
+				'label_for' => 'icemap_default_longitude',
+				'description' => 'Default longitude to use when geolocation fails (e.g., -107.5920)'
+			)
+		);
 	}
 
 	public function render_settings_section() {
-		echo '<p>Enter your Icecast server details (server, mount point, username, password) and Google Maps API key.</p>';
+		echo '<p>Enter your Icecast server details (server, mount point, username, password), Google Maps API key, Map ID, and default location coordinates.</p>';
 	}
 
 	public function render_text_field( $args ) {
@@ -119,12 +176,49 @@ class Icemap_Settings {
 	}
 
 	/**
+	 * Render a text field with description.
+	 */
+	public function render_text_field_with_description( $args ) {
+		$name = $args['label_for'];
+		$value = get_option( $name );
+		$description = isset( $args['description'] ) ? $args['description'] : '';
+
+		echo '<input type="text" name="' . $name . '" id="' . $name . '" value="' . $value . '" class="regular-text code"/>';
+
+		if ( ! empty( $description ) ) {
+			echo '<p class="description">' . $description . '</p>';
+		}
+	}
+
+	/**
 	 * Render a password field.
 	 */
 	public function render_password_field( $args ) {
 		$name = $args['label_for'];
 		$value = get_option( $name );
 		echo '<input type="password" name="' . $name . '" id="' . $name . '" value="' . $value . '" class="regular-text code"/>';
+	}
+
+	/**
+	 * Sanitize coordinate values to ensure they are valid numbers.
+	 *
+	 * @param string $value The coordinate value to sanitize.
+	 * @return float|string The sanitized coordinate value.
+	 */
+	public function sanitize_coordinate( $value ) {
+		// Remove any non-numeric characters except decimal point and minus sign
+		$value = preg_replace( '/[^0-9.-]/', '', $value );
+
+		// Convert to float
+		$float_value = floatval( $value );
+
+		// Check if it's a valid coordinate
+		if ( is_numeric( $value ) ) {
+			return $float_value;
+		}
+
+		// Return default value if invalid
+		return '';
 	}
 
 	/**

@@ -42,6 +42,9 @@ function App() {
 
 	// Process listeners and fetch geolocation data
 	useEffect(() => {
+		if ( processedListeners && processedListeners.length > 0 ) {
+			return;
+		}
 		async function processListeners() {
 			if (!listeners) return;
 			// console.log('Processing listeners (raw):', listeners);
@@ -79,11 +82,20 @@ function App() {
 				// Process each listener to add geolocation data
 				const processed = [];
 
-				// Limit to 5 ips.
-				listenersArray = listenersArray.slice(0, 4);
-				// console.log('Limited listeners array:', listenersArray);
+				// Remove any duplicates IPs from the listenersArray.
+				const uniqueIPs = new Set();
+				const filteredListeners = listenersArray.filter(listener => {
+					const ip =  listener.IP;
+					if (listener.IP && !uniqueIPs.has(ip)) {
+						uniqueIPs.add(ip);
+						return true; // Keep this listener
+					}
+					return false; // Skip this listener
+				});
 
-				for (const listener of listenersArray) {
+				console.log('Filtered listeners (unique IPs):', filteredListeners);
+
+				for (const listener of filteredListeners) {
 					// console.log('Processing listener:', listener);
 
 					// Check if listener exists and has an IP property
@@ -93,7 +105,7 @@ function App() {
 					}
 
 					// Check for IP property with different possible casings
-					const ip = listener.IP || listener.ip || listener.Ip || null;
+					const ip = listener.IP;
 					if (!ip) {
 						// console.log('Listener missing IP address:', listener);
 						continue;
@@ -119,33 +131,33 @@ function App() {
 						} else {
 							// console.log('No geolocation data for IP:', ip);
 
-							// Use random coordinates for testing if geolocation fails
-							const randomListener = {
+							// Use default coordinates if geolocation fails
+							const defaultListener = {
 								...listener,
-								latitude: Math.random() * 180 - 90,
-								longitude: Math.random() * 360 - 180,
+								latitude: window.defaultLatitude || 38.8683,
+								longitude: window.defaultLongitude || -107.5920,
 								city: 'Unknown',
 								country: 'Unknown',
 								ip: ip
 							};
-							// console.log('Processed listener with random coordinates:', randomListener);
-							processed.push(randomListener);
+							// console.log('Processed listener with default coordinates:', defaultListener);
+							processed.push(defaultListener);
 						}
 						// Pause for a short time to avoid overwhelming the geolocation API
 						await new Promise(resolve => setTimeout(resolve, 500));
 					} catch (err) {
 						console.error('Error fetching geolocation for IP:', ip, err);
 
-						// Use random coordinates for testing if geolocation fails
+						// Use default coordinates if geolocation fails
 						const errorListener = {
 							...listener,
-							latitude: Math.random() * 180 - 90,
-							longitude: Math.random() * 360 - 180,
+							latitude: window.defaultLatitude || 38.8683,
+							longitude: window.defaultLongitude || -107.5920,
 							city: 'Unknown',
 							country: 'Unknown',
 							ip: ip
 						};
-						// console.log('Processed listener with random coordinates (after error):', errorListener);
+						// console.log('Processed listener with default coordinates (after error):', errorListener);
 						processed.push(errorListener);
 					}
 				}

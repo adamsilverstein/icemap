@@ -36,8 +36,8 @@ class Icemap_REST_Controller {
 	}
 
 	public function get_listeners( $request ) {
-		$server	 = get_option( 'icemap_server' );
-		$mount		= get_option( 'icemap_mount' );
+		$server   = get_option( 'icemap_server' );
+		$mount    = get_option( 'icemap_mount' );
 		$username = get_option( 'icemap_username' );
 		$password = get_option( 'icemap_password' );
 

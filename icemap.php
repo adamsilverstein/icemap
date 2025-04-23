@@ -68,6 +68,10 @@ function icemap_render_block( $attributes ) {
 
 	// Make sure Google Maps API is enqueued if available
 	$api_key = get_option( 'icemap_google_maps_api_key' );
+	$map_id = get_option( 'icemap_google_maps_map_id' );
+	$default_latitude = get_option( 'icemap_default_latitude', '38.8683' );
+	$default_longitude = get_option( 'icemap_default_longitude', '-107.5920' );
+
 	if ( ! empty( $api_key ) ) {
 		wp_enqueue_script( 'google-maps' );
 	}
@@ -75,11 +79,16 @@ function icemap_render_block( $attributes ) {
 	// Build the HTML output
 	$output = '<div id="root" class="icemap-container" style="height: ' . esc_attr( $height ) . '"></div>';
 
-	// Add inline script to ensure Google Maps API key is set
+	// Add inline script to ensure Google Maps API key, Map ID, and default coordinates are set
 	if ( ! empty( $api_key ) ) {
 		$output .= '<script>
 			// Make Google Maps API key available globally
 			window.googleMapsApiKey = "' . esc_js( $api_key ) . '";
+			// Make Google Maps Map ID available globally
+			window.googleMapsMapId = "' . esc_js( $map_id ) . '";
+			// Make default coordinates available globally
+			window.defaultLatitude = ' . floatval( $default_latitude ) . ';
+			window.defaultLongitude = ' . floatval( $default_longitude ) . ';
 		</script>';
 	}
 
@@ -107,18 +116,28 @@ class Icemap {
 	public function enqueue_mapbox_gl() {
 		// This method is kept for backward compatibility but now loads Google Maps instead
 		$api_key = get_option( 'icemap_google_maps_api_key' );
-		if ( ! empty( $api_key ) ) {
-			// Load Google Maps API
-			wp_enqueue_script( 'google-maps', 'https://maps.googleapis.com/maps/api/js?key=' . esc_attr( $api_key ), array(), null, true );
+		$map_id = get_option( 'icemap_google_maps_map_id' );
+		$default_latitude = get_option( 'icemap_default_latitude', '38.8683' );
+		$default_longitude = get_option( 'icemap_default_longitude', '-107.5920' );
 
-			// Add the API key to the page
-			wp_add_inline_script( 'google-maps', 'window.googleMapsApiKey = "' . esc_js( $api_key ) . '";', 'after' );
+		if ( ! empty( $api_key ) ) {
+			// Load Google Maps API with marker library for Advanced Markers
+			wp_enqueue_script( 'google-maps', 'https://maps.googleapis.com/maps/api/js?key=' . esc_attr( $api_key ) . '&libraries=marker&loading=async', array(), null, array( 'loading' => 'async' ) );
+
+			// Add the API key, Map ID, and default coordinates to the page
+			$inline_script = 'window.googleMapsApiKey = "' . esc_js( $api_key ) . '";';
+			$inline_script .= 'window.googleMapsMapId = "' . esc_js( $map_id ) . '";';
+			$inline_script .= 'window.defaultLatitude = ' . floatval( $default_latitude ) . ';';
+			$inline_script .= 'window.defaultLongitude = ' . floatval( $default_longitude ) . ';';
+			wp_add_inline_script( 'google-maps', $inline_script, 'after' );
 		}
 	}
 
 	public function enqueue_scripts() {
-		// Get the API key
+		// Get the API key and default coordinates
 		$api_key = get_option( 'icemap_google_maps_api_key' );
+		$default_latitude = get_option( 'icemap_default_latitude', '38.8683' );
+		$default_longitude = get_option( 'icemap_default_longitude', '-107.5920' );
 
 		// Define dependencies - include google-maps if API key is available
 		$dependencies = array( 'wp-element' );
@@ -129,6 +148,11 @@ class Icemap {
 		// Enqueue the script with the appropriate dependencies
 		wp_enqueue_script( 'icemap-index', plugin_dir_url( __FILE__ ) . 'dist/index.js', $dependencies, '1.0.0', true );
 		wp_enqueue_style( 'icemap-index', plugin_dir_url( __FILE__ ) . 'dist/index.css', array(), '1.0.0' );
+
+		// Add default coordinates as global variables
+		$inline_script = 'window.defaultLatitude = ' . floatval( $default_latitude ) . ';';
+		$inline_script .= 'window.defaultLongitude = ' . floatval( $default_longitude ) . ';';
+		wp_add_inline_script( 'icemap-index', $inline_script, 'before' );
 	}
 
 	public function plugin_init() {

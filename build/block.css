@@ -10,6 +10,7 @@
 	color: #555;
 }
 
-.icemap-container div {
+.icemap-container > div,
+.icemap-container #map-container {
 	height: 100%;
 }

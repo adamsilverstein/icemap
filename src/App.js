@@ -34,11 +34,12 @@ function App() {
 
 		fetchListeners();
 
-		// Set up a refresh interval (every 60 seconds)
-		const intervalId = setInterval(fetchListeners, 60000);
+		// Set up a refresh interval.
+		const interval = 60 * 1000 * 5; // 5 minutes
+		const intervalId = setInterval( fetchListeners, interval );
 
 		// Clean up the interval on component unmount
-		return () => clearInterval(intervalId);
+		return () => clearInterval( intervalId );
 	}, []);
 
 	// Process listeners and fetch geolocation data
@@ -82,12 +83,18 @@ function App() {
 					return false; // Skip this listener
 				});
 
-				console.log('Filtered listeners (unique IPs):', filteredListeners);
+				// console.log('Filtered listeners (unique IPs):', filteredListeners);
 
 				// Process each listener one by one, adding markers as we go
 				for (const listener of filteredListeners) {
 					// Skip invalid listeners
 					if (!listener) continue;
+
+					// Skip listeners whos IPs have already been displayed.
+					if (mapMarkers.some(marker => marker.id === listener.IP)) {
+						// console.log('Skipping already processed IP:', listener.IP);
+						continue;
+					}
 
 					// Check for IP property
 					const ip = listener.IP;
@@ -131,7 +138,7 @@ function App() {
 						setMapMarkers(prevMarkers => [...prevMarkers, markerData]);
 
 						// Pause for a short time to avoid overwhelming the geolocation API
-						await new Promise(resolve => setTimeout(resolve, 50));
+						await new Promise(resolve => setTimeout(resolve, 5));
 					} catch (err) {
 						console.error('Error fetching geolocation for IP:', ip, err);
 

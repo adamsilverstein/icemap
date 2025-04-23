@@ -100,51 +100,75 @@ function App() {
 					const ip = listener.IP;
 					if (!ip) continue;
 
-					try {
-						// Fetch geolocation data for the IP
-						const geoData = await icecastService.getGeolocation(ip);
+					const cacheKey = `icemap_geo_${ip}`;
+					let markerData;
 
-						let markerData;
-						if (geoData && geoData.latitude && geoData.longitude) {
+					try {
+						// Check session storage first
+						const cachedGeo = sessionStorage.getItem(cacheKey);
+						if (cachedGeo) {
+							// console.log(`Cache hit for IP: ${ip}`);
+							const parsedGeo = JSON.parse(cachedGeo);
 							markerData = {
-								id: ip, // Use IP as unique identifier
+								id: ip,
 								position: {
-									lat: parseFloat(geoData.latitude),
-									lng: parseFloat(geoData.longitude)
+									lat: parsedGeo.latitude,
+									lng: parsedGeo.longitude
 								},
 								info: {
 									ip: ip,
-									city: geoData.city || 'Unknown',
-									country: geoData.country_name || 'Unknown'
+									city: parsedGeo.city,
+									country: parsedGeo.country
 								}
 							};
 						} else {
-							// Use default coordinates if geolocation fails
+							// console.log(`Cache miss for IP: ${ip}. Fetching...`);
+							// Fetch geolocation data for the IP
+							const geoData = await icecastService.getGeolocation(ip);
+
+							let finalGeo;
+							if (geoData && geoData.latitude && geoData.longitude) {
+								finalGeo = {
+									latitude: parseFloat(geoData.latitude),
+									longitude: parseFloat(geoData.longitude),
+									city: geoData.city || 'Unknown',
+									country: geoData.country_name || 'Unknown'
+								};
+							} else {
+								// Use default coordinates if geolocation fails
+								finalGeo = {
+									latitude: parseFloat(window.defaultLatitude || 38.8683),
+									longitude: parseFloat(window.defaultLongitude || -107.5920),
+									city: 'Unknown',
+									country: 'Unknown'
+								};
+							}
+
+							// Store in session storage
+							try {
+								sessionStorage.setItem(cacheKey, JSON.stringify(finalGeo));
+							} catch (storageError) {
+								console.error('Error saving to sessionStorage:', storageError);
+							}
+
 							markerData = {
-								id: ip, // Use IP as unique identifier
+								id: ip,
 								position: {
-									lat: parseFloat(window.defaultLatitude || 38.8683),
-									lng: parseFloat(window.defaultLongitude || -107.5920)
+									lat: finalGeo.latitude,
+									lng: finalGeo.longitude
 								},
 								info: {
 									ip: ip,
-									city: 'Unknown',
-									country: 'Unknown'
+									city: finalGeo.city,
+									country: finalGeo.country
 								}
 							};
 						}
-
-						// Add this marker to the map
-						setMapMarkers(prevMarkers => [...prevMarkers, markerData]);
-
-						// Pause for a short time to avoid overwhelming the geolocation API
-						await new Promise(resolve => setTimeout(resolve, 5));
 					} catch (err) {
-						console.error('Error fetching geolocation for IP:', ip, err);
-
-						// Use default coordinates if geolocation fails
-						const markerData = {
-							id: ip, // Use IP as unique identifier
+						console.error('Error processing geolocation for IP:', ip, err);
+						// Use default coordinates if any error occurs
+						markerData = {
+							id: ip,
 							position: {
 								lat: parseFloat(window.defaultLatitude || 38.8683),
 								lng: parseFloat(window.defaultLongitude || -107.5920)
@@ -155,10 +179,13 @@ function App() {
 								country: 'Unknown'
 							}
 						};
-
-						// Add this marker to the map
-						setMapMarkers(prevMarkers => [...prevMarkers, markerData]);
 					}
+
+					// Add this marker to the map
+					setMapMarkers(prevMarkers => [...prevMarkers, markerData]);
+
+					// Pause for a short time after processing each IP (cache hit or miss)
+					await new Promise(resolve => setTimeout(resolve, 50));
 				}
 			} catch (err) {
 				console.error('Error processing listeners:', err);

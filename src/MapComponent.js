@@ -147,7 +147,7 @@ function MapComponent({ markers }) {
 
 	// Handle map load
 	const onMapLoad = useCallback((map) => {
-		console.log('Map loaded successfully');
+		// console.log('Map loaded successfully');
 		mapRef.current = map;
 	}, []);
 

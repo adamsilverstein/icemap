@@ -4,9 +4,10 @@ import icecastService from './icecastService';
 
 function App() {
 	const [listeners, setListeners] = useState(null);
-	const [processedListeners, setProcessedListeners] = useState(null);
+	const [mapMarkers, setMapMarkers] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
+	const [isProcessingListeners, setIsProcessingListeners] = useState(false);
 
 	// Fetch listener data from the Icecast server
 	useEffect(() => {
@@ -42,50 +43,38 @@ function App() {
 
 	// Process listeners and fetch geolocation data
 	useEffect(() => {
-		if ( processedListeners && processedListeners.length > 0 ) {
-			return;
-		}
+		// If we don't have listeners data or we're already processing, don't start again
+		if (!listeners || isProcessingListeners) return;
+
 		async function processListeners() {
-			if (!listeners) return;
-			// console.log('Processing listeners (raw):', listeners);
-			// console.log('Processing listeners (type):', typeof listeners);
-			// console.log('Processing listeners (keys):', listeners ? Object.keys(listeners) : 'null');
 			try {
+				setIsProcessingListeners(true);
 				// Extract the actual listeners array
 				let listenersArray = [];
 				// More robust checking of the data structure
 				if (listeners.source && listeners.source.listener) {
-					// console.log('Found listeners.source.listener:', listeners.source.listener);
 					listenersArray = Array.isArray(listeners.source.listener)
 						? listeners.source.listener
 						: [listeners.source.listener]; // Handle case where it's a single object
 				} else if (listeners.source && listeners.source.listeners && listeners.source.listeners.listener) {
-					// console.log('Found listeners.source.listeners.listener:', listeners.source.listeners.listener);
 					listenersArray = Array.isArray(listeners.source.listeners.listener)
 						? listeners.source.listeners.listener
 						: [listeners.source.listeners.listener]; // Handle case where it's a single object
 				} else {
-					// console.log('Unexpected listeners data format:', listeners);
-					setProcessedListeners([]);
+					console.log('Unexpected listeners data format:', listeners);
 					return;
 				}
-
-				// console.log('Extracted listeners array:', listenersArray);
 
 				// Check if we have any listeners
 				if (!listenersArray || !listenersArray.length) {
-					// console.log('No listeners in the array');
-					setProcessedListeners([]);
+					console.log('No listeners in the array');
 					return;
 				}
-
-				// Process each listener to add geolocation data
-				const processed = [];
 
 				// Remove any duplicates IPs from the listenersArray.
 				const uniqueIPs = new Set();
 				const filteredListeners = listenersArray.filter(listener => {
-					const ip =  listener.IP;
+					const ip = listener.IP;
 					if (listener.IP && !uniqueIPs.has(ip)) {
 						uniqueIPs.add(ip);
 						return true; // Keep this listener
@@ -95,98 +84,84 @@ function App() {
 
 				console.log('Filtered listeners (unique IPs):', filteredListeners);
 
+				// Process each listener one by one, adding markers as we go
 				for (const listener of filteredListeners) {
-					// console.log('Processing listener:', listener);
+					// Skip invalid listeners
+					if (!listener) continue;
 
-					// Check if listener exists and has an IP property
-					if (!listener) {
-						// console.log('Listener is null or undefined');
-						continue;
-					}
-
-					// Check for IP property with different possible casings
+					// Check for IP property
 					const ip = listener.IP;
-					if (!ip) {
-						// console.log('Listener missing IP address:', listener);
-						continue;
-					}
+					if (!ip) continue;
 
 					try {
 						// Fetch geolocation data for the IP
-						// console.log('Fetching geolocation for IP:', ip);
 						const geoData = await icecastService.getGeolocation(ip);
-						// console.log('Received geolocation data:', geoData);
 
+						let markerData;
 						if (geoData && geoData.latitude && geoData.longitude) {
-							const processedListener = {
-								...listener,
-								latitude: geoData.latitude,
-								longitude: geoData.longitude,
-								city: geoData.city || 'Unknown',
-								country: geoData.country_name || 'Unknown',
-								ip: ip
+							markerData = {
+								id: ip, // Use IP as unique identifier
+								position: {
+									lat: parseFloat(geoData.latitude),
+									lng: parseFloat(geoData.longitude)
+								},
+								info: {
+									ip: ip,
+									city: geoData.city || 'Unknown',
+									country: geoData.country_name || 'Unknown'
+								}
 							};
-							// console.log('Processed listener with geolocation:', processedListener);
-							processed.push(processedListener);
 						} else {
-							// console.log('No geolocation data for IP:', ip);
-
 							// Use default coordinates if geolocation fails
-							const defaultListener = {
-								...listener,
-								latitude: window.defaultLatitude || 38.8683,
-								longitude: window.defaultLongitude || -107.5920,
-								city: 'Unknown',
-								country: 'Unknown',
-								ip: ip
+							markerData = {
+								id: ip, // Use IP as unique identifier
+								position: {
+									lat: parseFloat(window.defaultLatitude || 38.8683),
+									lng: parseFloat(window.defaultLongitude || -107.5920)
+								},
+								info: {
+									ip: ip,
+									city: 'Unknown',
+									country: 'Unknown'
+								}
 							};
-							// console.log('Processed listener with default coordinates:', defaultListener);
-							processed.push(defaultListener);
 						}
+
+						// Add this marker to the map
+						setMapMarkers(prevMarkers => [...prevMarkers, markerData]);
+
 						// Pause for a short time to avoid overwhelming the geolocation API
-						await new Promise(resolve => setTimeout(resolve, 500));
+						await new Promise(resolve => setTimeout(resolve, 50));
 					} catch (err) {
 						console.error('Error fetching geolocation for IP:', ip, err);
 
 						// Use default coordinates if geolocation fails
-						const errorListener = {
-							...listener,
-							latitude: window.defaultLatitude || 38.8683,
-							longitude: window.defaultLongitude || -107.5920,
-							city: 'Unknown',
-							country: 'Unknown',
-							ip: ip
+						const markerData = {
+							id: ip, // Use IP as unique identifier
+							position: {
+								lat: parseFloat(window.defaultLatitude || 38.8683),
+								lng: parseFloat(window.defaultLongitude || -107.5920)
+							},
+							info: {
+								ip: ip,
+								city: 'Unknown',
+								country: 'Unknown'
+							}
 						};
-						// console.log('Processed listener with default coordinates (after error):', errorListener);
-						processed.push(errorListener);
+
+						// Add this marker to the map
+						setMapMarkers(prevMarkers => [...prevMarkers, markerData]);
 					}
 				}
-
-				// Update the processed listeners
-				// console.log('Final processed listeners:', processed);
-				setProcessedListeners(processed);
 			} catch (err) {
 				console.error('Error processing listeners:', err);
+			} finally {
+				setIsProcessingListeners(false);
 			}
 		}
 
 		processListeners();
-	}, [listeners]);
-
-	if (loading && !listeners) {
-		return (
-			<div style={{
-				width: '100%',
-				height: '400px',
-				display: 'flex',
-				alignItems: 'center',
-				justifyContent: 'center',
-				backgroundColor: '#f0f0f0'
-			}}>
-				<p>Loading listener data...</p>
-			</div>
-		);
-	}
+	}, [listeners, isProcessingListeners]);
 
 	if (error) {
 		return (
@@ -211,8 +186,43 @@ function App() {
 	}
 
 	return (
-		<div>
-			<MapComponent listeners={processedListeners} />
+		<div style={{ position: 'relative' }}>
+			{/* Always render the map component, even while loading */}
+			<MapComponent markers={mapMarkers} />
+
+			{/* Show loading indicator if we're still fetching initial data */}
+			{loading && !listeners && (
+				<div style={{
+					position: 'absolute',
+					top: '200px', // Center vertically in the 400px map
+					left: '50%',
+					transform: 'translate(-50%, -50%)',
+					backgroundColor: 'rgba(255, 255, 255, 0.8)',
+					padding: '10px 20px',
+					borderRadius: '5px',
+					boxShadow: '0 2px 5px rgba(0, 0, 0, 0.2)',
+					zIndex: 1000 // Ensure it appears above the map
+				}}>
+					<p>Loading listener data...</p>
+				</div>
+			)}
+
+			{/* Show processing indicator when we're adding markers */}
+			{isProcessingListeners && (
+				<div style={{
+					position: 'absolute',
+					top: '20px',
+					right: '20px',
+					backgroundColor: 'rgba(255, 255, 255, 0.8)',
+					padding: '8px 15px',
+					borderRadius: '5px',
+					boxShadow: '0 2px 5px rgba(0, 0, 0, 0.2)',
+					zIndex: 1000, // Ensure it appears above the map
+					fontSize: '14px'
+				}}>
+					<p style={{ margin: 0 }}>Loading markers: {mapMarkers.length} added</p>
+				</div>
+			)}
 		</div>
 	);
 }

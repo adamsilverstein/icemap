@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 
-function MapComponent({ listeners }) {
+function MapComponent({ markers }) {
   // Load the Google Maps JavaScript API with marker library
   // This must be called before any other hooks that depend on it
   const { isLoaded, loadError } = useJsApiLoader({
@@ -26,14 +26,13 @@ function MapComponent({ listeners }) {
 
   const [zoom, setZoom] = useState(3);
   const [error, setError] = useState(null);
-  const [markers, setMarkers] = useState([]);
+  const [addedMarkerIds, setAddedMarkerIds] = useState(new Set());
   const [selectedMarker, setSelectedMarker] = useState(null);
   const mapRef = useRef(null);
-  const listenersRef = useRef(null);
   const advancedMarkersRef = useRef([]);
   const infoWindowRef = useRef(null);
 
-  // Create an info window for markers - must be defined before processListeners
+  // Create an info window for markers
   const createInfoWindow = useCallback(() => {
     if (!window.google || !window.google.maps) return null;
 
@@ -44,7 +43,7 @@ function MapComponent({ listeners }) {
     return infoWindowRef.current;
   }, []);
 
-  // Fit map bounds to show all markers - must be defined before processListeners
+  // Fit map bounds to show all markers
   const fitBoundsToMarkers = useCallback((markersToFit) => {
     if (!mapRef.current || !markersToFit.length || !window.google) return;
 
@@ -57,80 +56,34 @@ function MapComponent({ listeners }) {
     console.log('Map fitted to bounds');
   }, []);
 
-  // Process listeners data and create marker objects
-  const processListeners = useCallback(() => {
-    if (!isLoaded || loadError) {
-      console.log('Google Maps not loaded yet');
+  // Handle new markers being added
+  useEffect(() => {
+    // Only proceed if the map is loaded and we have markers to add
+    if (!isLoaded || loadError || !mapRef.current || !markers || !markers.length) {
       return;
     }
 
-    if (!listenersRef.current || !mapRef.current || !window.google) {
-      console.log('Cannot process listeners: map or data not ready');
-      return;
+    // Get the new markers that haven't been added yet
+    const newMarkers = markers.filter(marker => !addedMarkerIds.has(marker.id));
+
+    if (newMarkers.length === 0) {
+      return; // No new markers to add
     }
 
-    // Check if listeners is an array
-    const listenersArray = Array.isArray(listenersRef.current) ? listenersRef.current : [];
-    console.log('Processing listeners array:', listenersArray);
-
-    if (!listenersArray.length) {
-      console.log('No listeners in the array');
-      setMarkers([]);
-      return;
-    }
-
-    // Create marker data objects
-    const newMarkers = listenersArray
-      .filter(listener => listener && listener.latitude !== undefined && listener.longitude !== undefined)
-      .map((listener, index) => {
-        const ip = listener.ip || listener.IP || 'Unknown';
-        const city = listener.city || 'Unknown';
-        const country = listener.country || 'Unknown';
-
-        return {
-          id: index,
-          position: {
-            lat: parseFloat(listener.latitude),
-            lng: parseFloat(listener.longitude)
-          },
-          info: {
-            ip,
-            city,
-            country
-          }
-        };
-      });
-
-    console.log(`Created ${newMarkers.length} marker data objects`);
-    setMarkers(newMarkers);
-
-    // Clear existing advanced markers
-    advancedMarkersRef.current.forEach(marker => {
-      if (marker) marker.map = null;
-    });
-    advancedMarkersRef.current = [];
+    console.log(`Adding ${newMarkers.length} new markers to the map`);
 
     // Create the info window if it doesn't exist
     const infoWindow = createInfoWindow();
 
-    // Create and add advanced markers to the map
+    // Create and add advanced markers for the new markers
     if (window.google && window.google.maps && window.google.maps.marker && window.google.maps.marker.AdvancedMarkerElement) {
-      console.log('Creating advanced markers');
-
       // Add a small delay to ensure Google Maps API is fully initialized
       setTimeout(() => {
-        newMarkers.forEach((markerData, index) => {
+        newMarkers.forEach((markerData) => {
           try {
-            // Log the exact marker data being used
-            console.log(`Creating marker ${index} with data:`, {
-              position: markerData.position,
-              lat: markerData.position.lat,
-              lng: markerData.position.lng
-            });
-
             // Ensure position is valid
             if (!markerData.position || typeof markerData.position.lat !== 'number' || typeof markerData.position.lng !== 'number') {
-              console.error(`Invalid position for marker ${index}:`, markerData.position);
+              console.error(`Invalid position for marker ${markerData.id}:`, markerData.position);
               return;
             }
 
@@ -148,7 +101,6 @@ function MapComponent({ listeners }) {
 
             // Store reference to the marker
             advancedMarkersRef.current.push(advancedMarker);
-            console.log(`Basic marker ${index} created successfully`);
 
             // Add click listener to show info window
             advancedMarker.addListener('click', () => {
@@ -172,47 +124,31 @@ function MapComponent({ listeners }) {
               }
             });
 
-            console.log(`Advanced marker ${index} created with all features`);
+            // Mark this marker as added
+            setAddedMarkerIds(prevIds => new Set([...prevIds, markerData.id]));
           } catch (err) {
-            console.error(`Error creating advanced marker ${index}:`, err);
-            console.error('Marker data:', markerData);
-            console.error('Error details:', err.message, err.stack);
+            console.error(`Error creating advanced marker ${markerData.id}:`, err);
           }
         });
 
-        // If we have markers, fit the map to show all of them
-        if (markers.current && markers.current.length > 0 && mapRef.current) {
-          fitBoundsToMarkers(newMarkers);
+        // If we have enough markers, fit the map to show all of them
+        // Only do this for the first few markers and then occasionally
+        if (markers.length === 1 || markers.length === 3 || markers.length === 5 ||
+            (markers.length > 5 && markers.length % 5 === 0)) {
+          fitBoundsToMarkers(markers);
         }
-      }, 500); // 500ms delay to ensure API is fully loaded
+      }, 100); // Small delay to ensure API is fully loaded
     } else {
       console.error('Advanced Marker API not available');
-      console.error('Google object:', window.google);
-      console.error('Maps object:', window.google ? window.google.maps : 'undefined');
-      console.error('Marker object:', window.google && window.google.maps ? window.google.maps.marker : 'undefined');
       setError('Advanced Marker API not available. Please check your Google Maps API version and ensure the marker library is loaded.');
     }
-  }, [isLoaded, loadError, createInfoWindow, fitBoundsToMarkers]);
-
-  // Store listeners in a ref to access in callbacks
-  useEffect(() => {
-    listenersRef.current = listeners;
-    // Process listeners when they change
-    if (isLoaded && !loadError && mapRef.current) {
-      processListeners();
-    }
-  }, [listeners, isLoaded, loadError, processListeners]);
+  }, [markers, isLoaded, loadError, createInfoWindow, fitBoundsToMarkers, addedMarkerIds]);
 
   // Handle map load
   const onMapLoad = useCallback((map) => {
     console.log('Map loaded successfully');
     mapRef.current = map;
-
-    // Process listeners to create markers
-    if (listenersRef.current) {
-      processListeners();
-    }
-  }, [processListeners]);
+  }, []);
 
   // Clean up resources when component unmounts
   useEffect(() => {
@@ -260,7 +196,7 @@ function MapComponent({ listeners }) {
     return (
       <div style={{
         width: '100%',
-        height: '4100%00px',
+        height: '100%',
         backgroundColor: '#f8d7da',
         color: '#721c24',
         display: 'flex',

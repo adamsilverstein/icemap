@@ -5,7 +5,8 @@
 	"main": "index.js",
 	"scripts": {
 		"build": "wp-scripts build src/index.js src/block.js --output-path=build && cp src/block.css build/block.css && cp build/index.js dist/index.js && cp build/index.asset.php dist/index.asset.php",
-		"start": "wp-scripts start src/index.js src/block.js --output-path=build"
+		"start": "wp-scripts start src/index.js src/block.js --output-path=build",
+		"build:plugin": "npm run build && bestzip icemap.zip icemap.php includes/ dist/ build/"
 	},
 	"keywords": [
 		"wordpress",
@@ -16,7 +17,8 @@
 	"author": "Your Name",
 	"license": "GPL-2.0-or-later",
 	"devDependencies": {
-		"@wordpress/scripts": "^26.7.0"
+		"@wordpress/scripts": "^26.7.0",
+		"bestzip": "^2.2.1"
 	},
 	"dependencies": {
 		"@react-google-maps/api": "^2.20.6",

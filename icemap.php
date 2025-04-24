@@ -101,6 +101,7 @@ class Icemap {
 		add_action( 'plugins_loaded', array( $this, 'plugin_init' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_mapbox_gl' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
+		add_action( 'template_redirect', array( $this, 'handle_fullscreen_map_request' ) );
 
 		// Register block
 		add_action( 'init', 'icemap_register_block' );
@@ -114,22 +115,19 @@ class Icemap {
 	}
 
 	public function enqueue_mapbox_gl() {
-		// This method is kept for backward compatibility but now loads Google Maps instead
+		// This method is now primarily for adding inline data if Google Maps is loaded.
+		// The actual enqueuing happens in enqueue_scripts.
 		$api_key = get_option( 'icemap_google_maps_api_key' );
 		$map_id = get_option( 'icemap_google_maps_map_id' );
-		$default_latitude = get_option( 'icemap_default_latitude', '38.8683' );
-		$default_longitude = get_option( 'icemap_default_longitude', '-107.5920' );
 
-		if ( ! empty( $api_key ) ) {
-			// Load Google Maps API with marker library for Advanced Markers
-			wp_enqueue_script( 'google-maps', 'https://maps.googleapis.com/maps/api/js?key=' . esc_attr( $api_key ) . '&libraries=marker&loading=async', array(), null, array( 'loading' => 'async' ) );
-
-			// Add the API key, Map ID, and default coordinates to the page
+		// Only add this data if the google-maps script is expected to be loaded.
+		if ( ! empty( $api_key ) && wp_script_is( 'google-maps', 'registered' ) ) {
+			// Add the API key and Map ID to the page, attached to the google-maps handle.
+			// Note: Default coords are added in enqueue_scripts, attached to icemap-index.
 			$inline_script = 'window.googleMapsApiKey = "' . esc_js( $api_key ) . '";';
 			$inline_script .= 'window.googleMapsMapId = "' . esc_js( $map_id ) . '";';
-			$inline_script .= 'window.defaultLatitude = ' . floatval( $default_latitude ) . ';';
-			$inline_script .= 'window.defaultLongitude = ' . floatval( $default_longitude ) . ';';
-			wp_add_inline_script( 'google-maps', $inline_script, 'after' );
+			// Attach to google-maps handle if it exists and is registered.
+			wp_add_inline_script( 'google-maps', $inline_script, 'before' );
 		}
 	}
 
@@ -139,25 +137,103 @@ class Icemap {
 		$default_latitude = get_option( 'icemap_default_latitude', '38.8683' );
 		$default_longitude = get_option( 'icemap_default_longitude', '-107.5920' );
 
-		// Define dependencies - include google-maps if API key is available
+		// Define base dependencies
 		$dependencies = array( 'wp-element' );
+
+		// Conditionally register and add Google Maps as a dependency
 		if ( ! empty( $api_key ) ) {
+			// Register Google Maps script if not already registered
+			if ( ! wp_script_is( 'google-maps', 'registered' ) ) {
+				wp_register_script( 'google-maps', 'https://maps.googleapis.com/maps/api/js?key=' . esc_attr( $api_key ) . '&libraries=marker&loading=async', array(), null, array( 'strategy' => 'async' ) );
+			}
+			// Add google-maps as a dependency for our main script
 			$dependencies[] = 'google-maps';
+			// Enqueue google-maps explicitly (registration alone doesn't load it)
+			wp_enqueue_script( 'google-maps' );
 		}
 
-		// Enqueue the script with the appropriate dependencies
+		// Enqueue the main app script with its dependencies
 		wp_enqueue_script( 'icemap-index', plugin_dir_url( __FILE__ ) . 'dist/index.js', $dependencies, '1.0.0', true );
 		wp_enqueue_style( 'icemap-index', plugin_dir_url( __FILE__ ) . 'dist/index.css', array(), '1.0.0' );
 
-		// Add default coordinates as global variables
-		$inline_script = 'window.defaultLatitude = ' . floatval( $default_latitude ) . ';';
-		$inline_script .= 'window.defaultLongitude = ' . floatval( $default_longitude ) . ';';
-		wp_add_inline_script( 'icemap-index', $inline_script, 'before' );
+		// Add default coordinates as global variables, attached to our main script
+		$inline_script_coords = 'window.defaultLatitude = ' . floatval( $default_latitude ) . ';';
+		$inline_script_coords .= 'window.defaultLongitude = ' . floatval( $default_longitude ) . ';';
+		wp_add_inline_script( 'icemap-index', $inline_script_coords, 'before' );
 	}
 
 	public function plugin_init() {
 		require_once plugin_dir_path( __FILE__ ) . 'includes/class-icemap-settings.php';
 		new Icemap_Settings();
+	}
+
+	/**
+	 * Handles requests for the full-screen map path.
+	 */
+	public function handle_fullscreen_map_request() {
+		$icemap_path = trim( get_option( 'icemap_path', '' ), '/' );
+
+		// If the path setting is empty, do nothing.
+		if ( empty( $icemap_path ) ) {
+			return;
+		}
+
+		// Get the current request path.
+		$current_path = trim( parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
+
+		// Check if the current request matches the configured path.
+		if ( $current_path === $icemap_path ) {
+			// Get necessary options.
+			$api_key = get_option( 'icemap_google_maps_api_key' );
+			$map_id = get_option( 'icemap_google_maps_map_id' );
+			$default_latitude = get_option( 'icemap_default_latitude', '38.8683' );
+			$default_longitude = get_option( 'icemap_default_longitude', '-107.5920' );
+
+			// Start outputting the minimal HTML page.
+			?>
+			<!DOCTYPE html>
+			<html lang="en">
+			<head>
+				<meta charset="UTF-8">
+				<meta name="viewport" content="width=device-width, initial-scale=1.0">
+				<title>Icemap</title>
+				<style>
+					html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; }
+					#root { height: 100%; width: 100%; }
+					/* Optional: Hide admin bar if user is logged in */
+					#wpadminbar { display: none !important; }
+					html { margin-top: 0 !important; }
+				</style>
+				<?php
+				// Use our existing methods to enqueue scripts properly
+				// This ensures consistent script loading and avoids duplication
+				$this->enqueue_scripts();
+
+				// Print enqueued styles and scripts for the head.
+				wp_print_styles();
+				wp_print_head_scripts();
+				?>
+			</head>
+			<body>
+				<div id="root" class="icemap-container">Loading Map...</div>
+				<?php
+				// Add inline script data.
+				$inline_script = 'window.googleMapsApiKey = "' . esc_js( $api_key ) . '";';
+				$inline_script .= 'window.googleMapsMapId = "' . esc_js( $map_id ) . '";';
+				$inline_script .= 'window.defaultLatitude = ' . floatval( $default_latitude ) . ';';
+				$inline_script .= 'window.defaultLongitude = ' . floatval( $default_longitude ) . ';';
+				// Use wp_add_inline_script attached to the main script handle.
+				wp_add_inline_script( 'icemap-index', $inline_script, 'before' );
+
+				// Print footer scripts.
+				wp_print_footer_scripts();
+				?>
+			</body>
+			</html>
+			<?php
+			// Stop WordPress from loading the theme template.
+			exit;
+		}
 	}
 }
 

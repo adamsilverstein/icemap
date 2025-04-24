@@ -66,6 +66,14 @@ class Icemap_Settings {
 			)
 		);
 
+		register_setting(
+			'icemap_settings',
+			'icemap_path',
+			array(
+				'sanitize_callback' => 'sanitize_text_field'
+			)
+		);
+
 		add_settings_section(
 			'icemap_settings_section',
 			'Icemap Settings',
@@ -163,10 +171,22 @@ class Icemap_Settings {
 				'description' => 'Default longitude to use when geolocation fails (e.g., -107.5920)'
 			)
 		);
+
+		add_settings_field(
+			'icemap_path',
+			'Icemap Path',
+			array( $this, 'render_text_field_with_description' ),
+			'icemap-settings',
+			'icemap_settings_section',
+			array(
+				'label_for' => 'icemap_path',
+				'description' => 'Enter a path like \'maps/icemap\' for the full-screen map. Leave blank to disable.'
+			)
+		);
 	}
 
 	public function render_settings_section() {
-		echo '<p>Enter your Icecast server details (server, mount point, username, password), Google Maps API key, Map ID, and default location coordinates.</p>';
+		echo '<p>Enter your Icecast server details, Google Maps API key/Map ID, default location coordinates, and optional full-screen map path.</p>';
 	}
 
 	public function render_text_field( $args ) {

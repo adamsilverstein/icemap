@@ -257,7 +257,7 @@ function MapComponent({ markers }) {
 	}
 
 	return (
-		<div id="map-container">
+		<div id="map-container" style={{ height: '100%', width: '100%' }}>
 			<GoogleMap
 				mapContainerStyle={mapContainerStyle}
 				center={center}

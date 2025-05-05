@@ -259,8 +259,8 @@ function App() {
 			{isProcessingListeners && (
 				<div style={{
 					position: 'absolute',
-					top: '20px',
-					right: '20px',
+					top: '10px',
+					right: '55px',
 					backgroundColor: 'rgba(255, 255, 255, 0.8)',
 					padding: '8px 15px',
 					borderRadius: '5px',
@@ -271,6 +271,23 @@ function App() {
 					<p style={{ margin: 0 }}>Loading markers: {mapMarkers.length} added</p>
 				</div>
 			)}
+
+			{/* Always show listener count in the upper right corner */}
+			<div style={{
+				position: 'absolute',
+				top: '10px',
+				right: '55px',
+				backgroundColor: 'rgba(255, 255, 255, 0.8)',
+				padding: '8px 15px',
+				borderRadius: '5px',
+				boxShadow: '0 2px 5px rgba(0, 0, 0, 0.2)',
+				zIndex: 1000, // Ensure it appears above the map
+				fontSize: '14px',
+				// Hide this overlay when the processing indicator is shown
+				display: isProcessingListeners ? 'none' : 'block'
+			}}>
+				<p style={{ margin: 0 }}>Listeners: {mapMarkers.length}</p>
+			</div>
 		</div>
 	);
 }

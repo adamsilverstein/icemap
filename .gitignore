@@ -1,15 +1,15 @@
-/vendor/
+vendor/
 /composer.lock
-/build/
+build/
+dist/
 
 # Node.js
-/node_modules/
+node_modules/
 /npm-debug.log
 /yarn-error.log
 /yarn.lock
 
 # Build files
-/dist/
 
 # Environment files
 .env

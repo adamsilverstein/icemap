@@ -93,26 +93,26 @@ class Icemap_REST_Controller {
 			return new WP_Error( 'icemap_error', 'Empty response from server', array( 'status' => 500 ) );
 		}
 
-		// Try to parse XML
-		libxml_use_internal_errors( true );
-		$xml = simplexml_load_string( $body );
+		// Try to parse XML using Symfony DOM Crawler
+		try {
+			// Create a new DOM Crawler instance
+			$crawler = new \Symfony\Component\DomCrawler\Crawler($body);
 
-		if ( $xml === false ) {
-			$xml_errors = libxml_get_errors();
-			libxml_clear_errors();
-			$error_msg = 'XML parsing failed: ';
-			foreach ( $xml_errors as $error ) {
-				$error_msg .= $error->message . ' ';
-			}
-			error_log( 'Icemap: ' . $error_msg );
-			error_log( 'Icemap: Raw response: ' . substr( $body, 0, 1000 ) ); // Log first 1000 chars
-			return new WP_Error( 'icemap_error', 'Invalid XML response from server', array( 'status' => 500 ) );
+			// Convert the XML structure to an array
+			$result = $this->xml_to_array($crawler);
+
+			// Transform the data structure to match what the frontend expects
+			$transformed_result = $this->transform_icecast_data($result);
+
+			// Let WordPress handle the JSON encoding
+			// No need to encode to JSON here, as rest_ensure_response will do that
+		} catch (\Exception $e) {
+			error_log('Icemap: XML parsing failed: ' . $e->getMessage());
+			error_log('Icemap: Raw response: ' . substr($body, 0, 1000)); // Log first 1000 chars
+			return new WP_Error('icemap_error', 'Invalid XML response from server', array('status' => 500));
 		}
 
-		// Convert XML to JSON and ensure it's properly formatted
-		$json = json_encode( $xml );
-
-		return rest_ensure_response( $json );
+		return rest_ensure_response( $transformed_result );
 	}
 
 
@@ -228,7 +228,7 @@ class Icemap_REST_Controller {
 		}
 
 		// Try to parse JSON
-		$data = json_decode( $body );
+		$data = json_decode( $body, true ); // Decode as associative array
 
 		if ( $data === null && json_last_error() !== JSON_ERROR_NONE ) {
 			$error_msg = 'JSON parsing failed: ' . json_last_error_msg();
@@ -241,5 +241,114 @@ class Icemap_REST_Controller {
 		$this->cache_geolocation( $ip, $data );
 
 		return rest_ensure_response( $data );
+	}
+
+	/**
+	 * Transform the Icecast data structure to match what the frontend expects.
+	 *
+	 * @param array $data The original data from the Icecast server.
+	 * @return array The transformed data structure.
+	 */
+	private function transform_icecast_data($data) {
+		// Log the original data structure for debugging
+		error_log('Icemap: Original data structure: ' . json_encode($data));
+
+		// Initialize the result array
+		$result = array();
+
+		// Check if we have the expected structure
+		if (isset($data['icestats']) && isset($data['icestats']['source']) && isset($data['icestats']['source']['source'])) {
+			// Extract the source data
+			$source = $data['icestats']['source']['source'];
+
+			// Check if we have listeners
+			if (isset($source['listener'])) {
+				$listeners = $source['listener'];
+
+				// Initialize the transformed listeners array
+				$transformed_listeners = array();
+
+				// Process each listener
+				foreach ($listeners as $listener_wrapper) {
+					// Check if the listener is wrapped in another 'listener' object
+					if (isset($listener_wrapper['listener'])) {
+						// Extract the actual listener data
+						$transformed_listeners[] = $listener_wrapper['listener'];
+					} else {
+						// If not wrapped, use as is
+						$transformed_listeners[] = $listener_wrapper;
+					}
+				}
+
+				// Create the expected structure
+				$result = array(
+					'source' => array(
+						'listener' => $transformed_listeners
+					)
+				);
+			} else {
+				// No listeners found
+				$result = array(
+					'source' => array(
+						'listener' => array()
+					)
+				);
+			}
+		} else {
+			// If the structure is not as expected, return the original data
+			// This allows the frontend to handle different structures
+			$result = $data;
+		}
+
+		// Log the transformed data structure for debugging
+		error_log('Icemap: Transformed data structure: ' . json_encode($result));
+
+		return $result;
+	}
+
+	/**
+	 * Helper function to convert XML to an associative array.
+	 *
+	 * @param \Symfony\Component\DomCrawler\Crawler $crawler The DOM Crawler instance.
+	 * @return array The XML data as an associative array.
+	 */
+	private function xml_to_array($crawler) {
+		$result = array();
+
+		// Get the root node name
+		$rootNodeName = $crawler->getNode(0)->nodeName;
+
+		// Process child nodes
+		$children = $crawler->children();
+
+		if ($children->count() === 0) {
+			// If no children, return the text content
+			return $crawler->text();
+		}
+
+		// Initialize array for this node
+		$result[$rootNodeName] = array();
+
+		// Process each child node
+		foreach ($children as $child) {
+			$childCrawler = new \Symfony\Component\DomCrawler\Crawler($child);
+			$childName = $child->nodeName;
+
+			// Check if this node name already exists in the result
+			if (isset($result[$rootNodeName][$childName])) {
+				// If it exists but is not an array of nodes, convert it
+				if (!is_array($result[$rootNodeName][$childName]) || !isset($result[$rootNodeName][$childName][0])) {
+					$result[$rootNodeName][$childName] = array($result[$rootNodeName][$childName]);
+				}
+
+				// Add this node to the array
+				$result[$rootNodeName][$childName][] = $this->xml_to_array($childCrawler);
+			} else {
+				// First instance of this node name
+				$result[$rootNodeName][$childName] = $this->xml_to_array($childCrawler);
+			}
+		}
+
+		return $result;
 	}
 }

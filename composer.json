@@ -1,0 +1,16 @@
+{
+    "name": "icemap/icemap",
+    "description": "Displays a map of Icecast listeners on a WordPress website",
+    "type": "wordpress-plugin",
+    "require": {
+        "php": ">=7.4",
+        "masterminds/html5": "^2.7",
+        "symfony/dom-crawler": "^5.4.0 <5.4.22",
+        "symfony/css-selector": "^5.4.0 <5.4.22"
+    },
+    "autoload": {
+        "psr-4": {
+            "Icemap\\": "includes/"
+        }
+    }
+}

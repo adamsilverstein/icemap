@@ -6,7 +6,41 @@
  * Version: 1.0.0
  * Author: Your Name
  * Author URI: https://example.com
+ * Requires PHP: 7.4
+ * Requires at least: 5.0
+ * Text Domain: icemap
+ * Domain Path: /languages
+ *
+ * This plugin uses Composer packages to handle XML parsing instead of relying on the SimpleXML PHP extension.
  */
+
+// Load Composer autoloader if it exists
+if (file_exists(plugin_dir_path(__FILE__) . 'vendor/autoload.php')) {
+    require_once plugin_dir_path(__FILE__) . 'vendor/autoload.php';
+} else {
+    // Add an admin notice if the Composer dependencies are not installed
+    add_action('admin_notices', 'icemap_missing_composer_dependencies_notice');
+
+    // Disable plugin functionality
+    return;
+}
+
+/**
+ * Display an admin notice if Composer dependencies are missing.
+ */
+function icemap_missing_composer_dependencies_notice() {
+    ?>
+    <div class="notice notice-error">
+        <p>
+            <strong>Icemap Plugin Error:</strong> Composer dependencies are missing.
+            Please run <code>composer install</code> in the plugin directory to install required dependencies.
+        </p>
+        <p>
+            See the <a href="<?php echo esc_url(plugin_dir_url(__FILE__) . 'README.md'); ?>">README.md</a> file for installation instructions.
+        </p>
+    </div>
+    <?php
+}
 
 // Register the block
 function icemap_register_block() {
@@ -188,6 +222,8 @@ class Icemap {
 			$map_id            = get_option( 'icemap_google_maps_map_id' );
 			$default_latitude  = get_option( 'icemap_default_latitude', '38.8683' );
 			$default_longitude = get_option( 'icemap_default_longitude', '-107.5920' );
+
+			remove_action( 'wp_print_styles', 'print_emoji_styles' );
 
 			// Start outputting the minimal HTML page.
 			?>

@@ -6,7 +6,7 @@
 	"scripts": {
 		"build": "wp-scripts build src/index.js src/block.js --output-path=build && cp src/block.css build/block.css && cp build/index.js dist/index.js && cp build/index.asset.php dist/index.asset.php",
 		"start": "wp-scripts start src/index.js src/block.js --output-path=build",
-		"build:plugin": "npm run build && bestzip icemap.zip icemap.php includes/ dist/ build/"
+		"build:plugin": "composer install --no-dev && npm run build && bestzip icemap.zip icemap.php includes/ dist/ build/ vendor/ composer.json README.md"
 	},
 	"keywords": [
 		"wordpress",

@@ -18,10 +18,24 @@ function App() {
 				const data = await icecastService.getListeners();
 				// console.log('Received listener data (raw):', data);
 
-				// The data is already parsed in icecastService.js, no need to parse it again
-				// Check if data is a string (needs parsing) or already an object
-				const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
-				// console.log('Parsed listener data:', parsedData);
+				// The data should already be parsed in icecastService.js
+				// But let's add extra safeguards
+				let parsedData;
+
+				if (typeof data === 'string') {
+					try {
+						// Try to parse if it's a string
+						parsedData = JSON.parse(data);
+						console.log('Had to parse string data:', parsedData);
+					} catch (parseError) {
+						console.error('Failed to parse string data:', parseError);
+						throw new Error('Invalid data format received from server');
+					}
+				} else {
+					// Use as is if it's already an object
+					parsedData = data;
+				}
+
 
 				setListeners(parsedData);
 			} catch (err) {

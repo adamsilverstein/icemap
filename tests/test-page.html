@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Icemap Test Page</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .content {
+            padding: 20px;
+        }
+        .map-wrapper {
+            height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .test-controls {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .test-controls button {
+            margin: 5px;
+            padding: 8px 16px;
+            border: 1px solid #007cba;
+            background: #007cba;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .test-controls button:hover {
+            background: #005a87;
+        }
+        .test-controls button.secondary {
+            background: #6c757d;
+            border-color: #6c757d;
+        }
+        .test-controls button.secondary:hover {
+            background: #545b62;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Icemap Plugin Test Page</h1>
+            <p>Test environment for visual regression testing</p>
+        </div>
+        
+        <div class="content">
+            <div class="test-controls">
+                <h3>Test Controls</h3>
+                <button onclick="setLoadingState()">Show Loading State</button>
+                <button onclick="setErrorState()">Show Error State</button>
+                <button onclick="setNormalState()">Show Normal State</button>
+                <button onclick="setMobileView()" class="secondary">Mobile View</button>
+                <button onclick="setTabletView()" class="secondary">Tablet View</button>
+                <button onclick="setDesktopView()" class="secondary">Desktop View</button>
+            </div>
+            
+            <div id="icemap-container" class="map-wrapper">
+                <!-- React app will be mounted here -->
+                <div id="root">
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%;">
+                        <p>Loading Icemap...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mock Google Maps API for testing
+        window.googleMapsApiKey = 'test-api-key-for-testing';
+        window.googleMapsMapId = 'test-map-id-for-testing';
+        
+        // Mock Google Maps API
+        window.google = {
+            maps: {
+                Map: class MockMap {
+                    constructor(options) {
+                        this.options = options;
+                        this.setCenter = () => {};
+                        this.setZoom = () => {};
+                        this.fitBounds = () => {};
+                    }
+                },
+                LatLngBounds: class MockLatLngBounds {
+                    constructor() {
+                        this.extend = () => {};
+                    }
+                },
+                marker: {
+                    AdvancedMarkerElement: class MockAdvancedMarker {
+                        constructor(options) {
+                            this.options = options;
+                            this.addListener = () => {};
+                            this.map = null;
+                        }
+                    }
+                }
+            }
+        };
+
+        // Test control functions
+        function setLoadingState() {
+            const root = document.getElementById('root');
+            root.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100%; background-color: #f0f0f0;">
+                    <div style="text-align: center;">
+                        <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+                        <p style="margin: 0; color: #666;">Loading map...</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setErrorState() {
+            const root = document.getElementById('root');
+            root.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100%; background-color: #f8d7da; color: #721c24; padding: 20px; border: 1px solid #f5c6cb; border-radius: 5px;">
+                    <div style="text-align: center;">
+                        <h3 style="margin-top: 0; font-size: 18px;">Map Error</h3>
+                        <p style="margin: 4px 0;">Error loading Google Maps: Invalid API key</p>
+                        <p style="margin: 4px 0;">Please check your Google Maps API key and internet connection.</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setNormalState() {
+            const root = document.getElementById('root');
+            root.innerHTML = `
+                <div id="map-container" style="height: 100%; width: 100%; background: linear-gradient(45deg, #e3f2fd, #bbdefb); display: flex; align-items: center; justify-content: center;">
+                    <div style="text-align: center; color: #1976d2;">
+                        <h3>Icemap Component</h3>
+                        <p>Map container loaded successfully</p>
+                        <div style="margin-top: 20px; padding: 10px; background: rgba(255,255,255,0.8); border-radius: 4px;">
+                            <small>Mock Google Maps integration for testing</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setMobileView() {
+            document.body.style.maxWidth = '375px';
+            document.body.style.margin = '0 auto';
+        }
+
+        function setTabletView() {
+            document.body.style.maxWidth = '768px';
+            document.body.style.margin = '0 auto';
+        }
+
+        function setDesktopView() {
+            document.body.style.maxWidth = 'none';
+            document.body.style.margin = '0';
+        }
+
+        // Add CSS animation for loading spinner
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Initialize with normal state
+        setNormalState();
+    </script>
+</body>
+</html>

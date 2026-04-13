@@ -6,7 +6,15 @@
 	"scripts": {
 		"build": "wp-scripts build src/index.js src/block.js --output-path=build && cp src/block.css build/block.css && cp build/index.js dist/index.js && cp build/index.asset.php dist/index.asset.php",
 		"start": "wp-scripts start src/index.js src/block.js --output-path=build",
-		"build:plugin": "composer install --no-dev && npm run build && bestzip icemap.zip icemap.php includes/ dist/ build/ vendor/ composer.json README.md"
+		"build:plugin": "composer install --no-dev && npm run build && bestzip icemap.zip icemap.php includes/ dist/ build/ vendor/ composer.json README.md",
+		"test": "playwright test",
+		"test:ui": "playwright test --ui",
+		"test:headed": "playwright test --headed",
+		"test:visual": "playwright test --grep @visual",
+		"test:update-snapshots": "playwright test --update-snapshots",
+		"test:runner": "node scripts/run-tests.js",
+		"playwright:install": "playwright install",
+		"playwright:install-deps": "playwright install-deps"
 	},
 	"keywords": [
 		"wordpress",
@@ -17,6 +25,7 @@
 	"author": "Your Name",
 	"license": "GPL-2.0-or-later",
 	"devDependencies": {
+		"@playwright/test": "^1.40.0",
 		"@wordpress/scripts": "^30.15.0",
 		"bestzip": "^2.2.1"
 	},

@@ -1,5 +1,57 @@
-vendor/
-/composer.lock
+# Test files
+tests/screenshots/
+tests/test-results/
+tests/test-data/
+playwright-report/
+test-results/
+playwright/.cache/
+
+# Node modules
+node_modules/
+
+# Build files
 build/
 dist/
-/icemap.zip
+vendor/
+icemap.zip
+
+# WordPress
+wp-config.php
+wp-content/uploads/
+wp-content/cache/
+wp-content/backup-db/
+wp-content/backups/
+wp-content/blogs.dir/
+wp-content/upgrade/
+wp-content/uploads/
+wp-content/mu-plugins/
+wp-content/wp-cache-config.php
+wp-content/plugins/hello.php
+
+# Logs
+*.log
+error_log
+access_log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

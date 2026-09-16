@@ -63,28 +63,34 @@ function icemap_register_block() {
 	) );
 }
 
-// Enqueue block assets
-function icemap_enqueue_block_assets() {
+/**
+ * Registers the block editor assets.
+ *
+ * Registration only. icemap_register_block() passes the 'icemap-block-editor'
+ * handle to register_block_type() as editor_script and editor_style, so
+ * WordPress enqueues them in the editor and nowhere else. Enqueuing them here
+ * would put them on every front end page too, and the editor style depends on
+ * wp-edit-blocks, which pulls the whole block editor stylesheet along with it.
+ */
+function icemap_register_block_assets() {
 	// Get block.asset.php file for dependencies
 	$asset_file = include( plugin_dir_path( __FILE__ ) . 'build/block.asset.php' );
 
-	// Register and enqueue the block editor script
+	// Register the block editor script
 	wp_register_script(
 		'icemap-block-editor',
 		plugin_dir_url( __FILE__ ) . 'build/block.js',
 		$asset_file['dependencies'],
 		$asset_file['version']
 	);
-	wp_enqueue_script( 'icemap-block-editor' );
 
-	// Register and enqueue the block editor style
+	// Register the block editor style
 	wp_register_style(
 		'icemap-block-editor',
 		plugin_dir_url( __FILE__ ) . 'build/block.css',
 		array( 'wp-edit-blocks' ),
 		filemtime( plugin_dir_path( __FILE__ ) . 'build/block.css' )
 	);
-	wp_enqueue_style( 'icemap-block-editor' );
 
 	// Register script translations
 	if ( function_exists( 'wp_set_script_translations' ) ) {
@@ -134,12 +140,15 @@ class Icemap {
 		add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
 		add_action( 'plugins_loaded', array( $this, 'plugin_init' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_mapbox_gl' ) );
-		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
+		// Register only. The map assets are enqueued by icemap_render_block()
+		// on pages that actually contain the block, and by
+		// handle_fullscreen_map_request() on the full-screen map path.
+		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ) );
 		add_action( 'template_redirect', array( $this, 'handle_fullscreen_map_request' ) );
 
 		// Register block
 		add_action( 'init', 'icemap_register_block' );
-		add_action( 'init', 'icemap_enqueue_block_assets' );
+		add_action( 'init', 'icemap_register_block_assets' );
 	}
 
 	public function register_rest_routes() {
@@ -165,7 +174,15 @@ class Icemap {
 		}
 	}
 
-	public function enqueue_scripts() {
+	/**
+	 * Registers the map script and style without enqueuing them.
+	 *
+	 * Runs on every front end request so the handles are available to whatever
+	 * needs them later, but nothing is sent to the browser until something
+	 * asks for it. icemap_render_block() asks on pages containing the block,
+	 * and handle_fullscreen_map_request() asks on the full-screen map path.
+	 */
+	public function register_assets() {
 		// Get the API key and default coordinates
 		$api_key = get_option( 'icemap_google_maps_api_key' );
 		$default_latitude = get_option( 'icemap_default_latitude', '38.8683' );
@@ -180,20 +197,46 @@ class Icemap {
 			if ( ! wp_script_is( 'google-maps', 'registered' ) ) {
 				wp_register_script( 'google-maps', 'https://maps.googleapis.com/maps/api/js?key=' . esc_attr( $api_key ) . '&libraries=marker&loading=async', array(), null, array( 'strategy' => 'async' ) );
 			}
-			// Add google-maps as a dependency for our main script
+			// Add google-maps as a dependency for our main script so enqueuing
+			// icemap-index pulls Google Maps in with it.
 			$dependencies[] = 'google-maps';
-			// Enqueue google-maps explicitly (registration alone doesn't load it)
-			wp_enqueue_script( 'google-maps' );
 		}
 
-		// Enqueue the main app script with its dependencies
-		wp_enqueue_script( 'icemap-index', plugin_dir_url( __FILE__ ) . 'dist/index.js', $dependencies, '1.0.0', true );
-		wp_enqueue_style( 'icemap-index', plugin_dir_url( __FILE__ ) . 'dist/index.css', array(), '1.0.0' );
+		// Register the main app script and style with its dependencies
+		wp_register_script( 'icemap-index', plugin_dir_url( __FILE__ ) . 'dist/index.js', $dependencies, '1.0.0', true );
+		wp_register_style( 'icemap-index', plugin_dir_url( __FILE__ ) . 'dist/index.css', array(), '1.0.0' );
 
-		// Add default coordinates as global variables, attached to our main script
+		// Add default coordinates as global variables, attached to our main
+		// script. Inline script only prints if icemap-index is enqueued.
 		$inline_script_coords  = 'window.defaultLatitude = ' . floatval( $default_latitude ) . ';';
 		$inline_script_coords .= 'window.defaultLongitude = ' . floatval( $default_longitude ) . ';';
 		wp_add_inline_script( 'icemap-index', $inline_script_coords, 'before' );
+
+		// Enqueue up front when the requested post contains the block, so the
+		// assets go out in the head. icemap_render_block() enqueues as well,
+		// which covers the block turning up somewhere has_block() cannot see,
+		// such as a template part; a second enqueue of the same handle is a
+		// no-op.
+		if ( is_singular() && has_block( 'icemap/map', get_queried_object_id() ) ) {
+			wp_enqueue_script( 'icemap-index' );
+			wp_enqueue_style( 'icemap-index' );
+		}
+	}
+
+	/**
+	 * Registers the map assets and enqueues them.
+	 *
+	 * Only for callers that know the page needs a map. The full-screen map
+	 * handler runs on template_redirect and exits before wp_enqueue_scripts
+	 * fires, so it calls this directly rather than relying on the hook.
+	 */
+	public function enqueue_scripts() {
+		if ( ! wp_script_is( 'icemap-index', 'registered' ) ) {
+			$this->register_assets();
+		}
+
+		wp_enqueue_script( 'icemap-index' );
+		wp_enqueue_style( 'icemap-index' );
 	}
 
 	public function plugin_init() {

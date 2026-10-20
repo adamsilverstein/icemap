@@ -7,7 +7,7 @@
  * Author: Your Name
  * Author URI: https://example.com
  * Requires PHP: 7.4
- * Requires at least: 5.0
+ * Requires at least: 6.6
  * Text Domain: icemap
  * Domain Path: /languages
  *
